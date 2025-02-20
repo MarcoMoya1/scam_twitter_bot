@@ -44,64 +44,96 @@ async function loginTwitter() {
   return { browser, page };
 }
 
-// Function to Like Tweets
 async function likeTweets(page, keyword, maxLikes = 5) {
-  console.log(`Searching for tweets containing: "${keyword}"`);
+  console.log(`🔍 Searching for tweets containing: "${keyword}"`);
   await page.goto(`https://twitter.com/search?q=${encodeURIComponent(keyword)}&f=live`, { waitUntil: "networkidle2" });
-
-  await new Promise(resolve => setTimeout(resolve, 3000)); // Allow tweets to load
-
-  const likeButtons = await page.$$('div[data-testid="like"]');
 
   let likeCount = 0;
-  for (let button of likeButtons) {
-    if (likeCount >= maxLikes) break;
-    await button.click();
-    console.log(`Liked tweet ${likeCount + 1}`);
-    likeCount++;
-    await new Promise(resolve => setTimeout(resolve, 2000));
-  }
+  let scrollAttempts = 0;
 
-  console.log(`Finished liking ${likeCount} tweets.`);
-}
-async function retweetTweets(page, keyword, maxRetweets = 5) {
-  console.log(`Searching for recent high-engagement tweets containing: "${keyword}"`);
-  await page.goto(`https://twitter.com/search?q=${encodeURIComponent(keyword)}&f=live`, { waitUntil: "networkidle2" });
+  while (likeCount < maxLikes && scrollAttempts < 5) { // Scroll max 5 times
+    const tweets = await page.$$('article');
 
-  await new Promise(resolve => setTimeout(resolve, 3000)); // Allow tweets to load
+    for (let tweet of tweets) {
+      if (likeCount >= maxLikes) break;
 
-  const tweets = await page.$$('article');
-  let retweetCount = 0;
+      const engagement = await tweet.evaluate(node => {
+        const stats = node.querySelectorAll('div[data-testid="like"], div[data-testid="retweet"], div[data-testid="reply"]');
+        return {
+          likes: stats[0] ? parseInt(stats[0].innerText.replace(/\D/g, '')) || 0 : 0,
+          retweets: stats[1] ? parseInt(stats[1].innerText.replace(/\D/g, '')) || 0 : 0,
+          replies: stats[2] ? parseInt(stats[2].innerText.replace(/\D/g, '')) || 0 : 0
+        };
+      });
 
-  for (let tweet of tweets) {
-    if (retweetCount >= maxRetweets) break;
-
-    // Get engagement numbers
-    const engagement = await tweet.evaluate(node => {
-      const stats = node.querySelectorAll('div[data-testid="like"], div[data-testid="retweet"], div[data-testid="reply"]');
-      return {
-        likes: stats[0] ? parseInt(stats[0].innerText.replace(/\D/g, '')) || 0 : 0,
-        retweets: stats[1] ? parseInt(stats[1].innerText.replace(/\D/g, '')) || 0 : 0,
-        replies: stats[2] ? parseInt(stats[2].innerText.replace(/\D/g, '')) || 0 : 0
-      };
-    });
-
-    // Filter for high engagement
-    if (engagement.likes >= 20 || engagement.retweets >= 10 || engagement.replies >= 5) {
-      const retweetButton = await tweet.$('div[data-testid="retweet"]');
-      if (retweetButton) {
-        await retweetButton.click();
-        await page.waitForSelector('div[data-testid="retweetConfirm"]');
-        await page.click('div[data-testid="retweetConfirm"]');
-        console.log(`Retweeted a high-engagement tweet: ${engagement.likes} Likes, ${engagement.retweets} Retweets, ${engagement.replies} Replies`);
-        retweetCount++;
-        await new Promise(resolve => setTimeout(resolve, 2000));
+      if (engagement.likes >= 20 || engagement.retweets >= 10 || engagement.replies >= 5) {
+        const likeButton = await tweet.$('div[data-testid="like"]');
+        if (likeButton) {
+          await likeButton.click();
+          console.log(`👍 Liked a tweet with ${engagement.likes} Likes, ${engagement.retweets} Retweets, ${engagement.replies} Replies`);
+          likeCount++;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
       }
+    }
+
+    if (likeCount < maxLikes) {
+      console.log("📜 Scrolling down for more tweets...");
+      await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+      await page.waitForTimeout(3000);
+      scrollAttempts++;
     }
   }
 
-  console.log(`Finished retweeting ${retweetCount} tweets.`);
+  console.log(`✅ Finished liking ${likeCount} tweets.`);
 }
+
+async function retweetTweets(page, keyword, maxRetweets = 5) {
+  console.log(`🔍 Searching for tweets containing: "${keyword}"`);
+  await page.goto(`https://twitter.com/search?q=${encodeURIComponent(keyword)}&f=live`, { waitUntil: "networkidle2" });
+
+  let retweetCount = 0;
+  let scrollAttempts = 0;
+
+  while (retweetCount < maxRetweets && scrollAttempts < 5) {
+    const tweets = await page.$$('article');
+
+    for (let tweet of tweets) {
+      if (retweetCount >= maxRetweets) break;
+
+      const engagement = await tweet.evaluate(node => {
+        const stats = node.querySelectorAll('div[data-testid="like"], div[data-testid="retweet"], div[data-testid="reply"]');
+        return {
+          likes: stats[0] ? parseInt(stats[0].innerText.replace(/\D/g, '')) || 0 : 0,
+          retweets: stats[1] ? parseInt(stats[1].innerText.replace(/\D/g, '')) || 0 : 0,
+          replies: stats[2] ? parseInt(stats[2].innerText.replace(/\D/g, '')) || 0 : 0
+        };
+      });
+
+      if (engagement.likes >= 20 || engagement.retweets >= 10 || engagement.replies >= 5) {
+        const retweetButton = await tweet.$('div[data-testid="retweet"]');
+        if (retweetButton) {
+          await retweetButton.click();
+          await page.waitForSelector('div[data-testid="retweetConfirm"]');
+          await page.click('div[data-testid="retweetConfirm"]');
+          console.log(`🔁 Retweeted a tweet with ${engagement.likes} Likes, ${engagement.retweets} Retweets, ${engagement.replies} Replies`);
+          retweetCount++;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+    }
+
+    if (retweetCount < maxRetweets) {
+      console.log("📜 Scrolling down for more tweets...");
+      await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+      await page.waitForTimeout(3000);
+      scrollAttempts++;
+    }
+  }
+
+  console.log(`✅ Finished retweeting ${retweetCount} tweets.`);
+}
+
 
 async function postTweet(page, keyword) {
   console.log(`Searching for latest scam tweets for posting alert...`);
