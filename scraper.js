@@ -19,7 +19,7 @@ async function loginTwitter() {
   console.log("Pressed Enter...");
 
   // Wait for password field
-  await new Promise(resolve => setTimeout(resolve, 3000)); // Delay for transition
+  await new Promise(resolve => setTimeout(resolve, 3000)); // Give time for UI transition
   await page.waitForSelector('input[name="password"]', { timeout: 15000 });
   console.log("Password field detected...");
 
@@ -44,6 +44,7 @@ async function loginTwitter() {
   return { browser, page };
 }
 
+// Function to Like Tweets (with scrolling and filtering)
 async function likeTweets(page, keyword, maxLikes = 5) {
   console.log(`🔍 Searching for tweets containing: "${keyword}"`);
   await page.goto(`https://twitter.com/search?q=${encodeURIComponent(keyword)}&f=live`, { waitUntil: "networkidle2" });
@@ -80,7 +81,7 @@ async function likeTweets(page, keyword, maxLikes = 5) {
     if (likeCount < maxLikes) {
       console.log("📜 Scrolling down for more tweets...");
       await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-      await page.waitForTimeout(3000);
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Scroll delay
       scrollAttempts++;
     }
   }
@@ -88,6 +89,7 @@ async function likeTweets(page, keyword, maxLikes = 5) {
   console.log(`✅ Finished liking ${likeCount} tweets.`);
 }
 
+// Function to Retweet Tweets (with scrolling and filtering)
 async function retweetTweets(page, keyword, maxRetweets = 5) {
   console.log(`🔍 Searching for tweets containing: "${keyword}"`);
   await page.goto(`https://twitter.com/search?q=${encodeURIComponent(keyword)}&f=live`, { waitUntil: "networkidle2" });
@@ -126,7 +128,7 @@ async function retweetTweets(page, keyword, maxRetweets = 5) {
     if (retweetCount < maxRetweets) {
       console.log("📜 Scrolling down for more tweets...");
       await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-      await page.waitForTimeout(3000);
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Scroll delay
       scrollAttempts++;
     }
   }
@@ -134,53 +136,19 @@ async function retweetTweets(page, keyword, maxRetweets = 5) {
   console.log(`✅ Finished retweeting ${retweetCount} tweets.`);
 }
 
+// Function to Post a Tweet
+async function postTweet(page, tweetText) {
+  console.log("📝 Posting a scam alert tweet...");
+  await page.goto("https://twitter.com/home", { waitUntil: "networkidle2" });
 
-async function postTweet(page, keyword) {
-  console.log(`Searching for latest scam tweets for posting alert...`);
-  await page.goto(`https://twitter.com/search?q=${encodeURIComponent(keyword)}&f=live`, { waitUntil: "networkidle2" });
+  await page.waitForSelector('div[data-testid="tweetTextarea_0"]');
+  await page.click('div[data-testid="tweetTextarea_0"]');
+  await page.keyboard.type(tweetText, { delay: 50 });
 
-  await new Promise(resolve => setTimeout(resolve, 3000));
+  await page.waitForSelector('div[data-testid="tweetButton"]');
+  await page.click('div[data-testid="tweetButton"]');
 
-  const tweets = await page.$$('article');
-
-  for (let tweet of tweets) {
-    // Extract tweet text
-    const tweetText = await tweet.evaluate(el => el.innerText);
-
-    // Get engagement numbers
-    const engagement = await tweet.evaluate(node => {
-      const stats = node.querySelectorAll('div[data-testid="like"], div[data-testid="retweet"], div[data-testid="reply"]');
-      return {
-        likes: stats[0] ? parseInt(stats[0].innerText.replace(/\D/g, '')) || 0 : 0,
-        retweets: stats[1] ? parseInt(stats[1].innerText.replace(/\D/g, '')) || 0 : 0,
-        replies: stats[2] ? parseInt(stats[2].innerText.replace(/\D/g, '')) || 0 : 0
-      };
-    });
-
-    // Only tweet about high-engagement scam posts
-    if (engagement.likes >= 50 || engagement.retweets >= 20) {
-      console.log("Found a high-engagement scam tweet, posting an alert...");
-
-      await page.goto("https://twitter.com/home", { waitUntil: "networkidle2" });
-
-      await page.waitForSelector('div[data-testid="tweetTextarea_0"]');
-      await page.click('div[data-testid="tweetTextarea_0"]');
-
-      const alertMessage = `🚨 SCAM ALERT! 🚨  
-"${tweetText.substring(0, 200)}..."  
-Trending with ${engagement.likes} Likes, ${engagement.retweets} Retweets.  
-Stay safe! #CryptoScam #ScamAlert`;
-
-      await page.keyboard.type(alertMessage, { delay: 50 });
-
-      await page.waitForSelector('div[data-testid="tweetButton"]');
-      await page.click('div[data-testid="tweetButton"]');
-
-      console.log("Scam alert tweet posted successfully!");
-      break;
-    }
-  }
+  console.log("✅ Scam alert tweet posted successfully!");
 }
-
 
 module.exports = { loginTwitter, likeTweets, retweetTweets, postTweet };
