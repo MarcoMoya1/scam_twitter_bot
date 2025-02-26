@@ -21,3 +21,6 @@ cron.schedule("0 * * * *", async () => {
 
 // Run once immediately when the script starts
 runBot();
+
+
+console.log ("we running");
